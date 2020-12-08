@@ -30,6 +30,7 @@ class Database:
     def create_table(self):
         sql = """
         CREATE TABLE IF NOT EXISTS Films (
+            id int NOT NULL,
             Name varchar(255) NOT NULL,
             ToWatch varchar(255),
             Watched varchar(255),
@@ -46,37 +47,40 @@ class Database:
         return sql, tuple(parameters.values())
 
     def add_user(self, name: str):
-        return self.execute("INSERT INTO Films(Name) VALUES(?)", parameters=(name, ), commit=True)
+        return self.execute("INSERT INTO Films(id, Name) VALUES(?, ?)", parameters=(self.count_films()[-1], name),
+                            commit=True)
 
-    def add_film(self, name: str, title: str, watched: bool = False):
+    def add_film(self, id: int, name: str, title: str, watched: bool = False):
         if watched:
             sql = f"""
-            INSERT INTO Films(Name, Watched) VALUES(?, ?);
+            INSERT INTO Films(id, Name, Watched) VALUES(?, ?, ?);
             """
         else:
             sql = f"""
-            INSERT INTO Films(Name, ToWatch) VALUES(?, ?);
+            INSERT INTO Films(id, Name, ToWatch) VALUES(?, ?, ?);
             """
-        return self.execute(sql, parameters=(name, title), commit=True)
+        return self.execute(sql, parameters=(id, name, title), commit=True)
 
     def select_column(self, column: str = None, everyone: bool = False):  # все фильмы из всех таблиц, вернет 2 списка
         if everyone:
-            return self.execute(f"SELECT    * FROM Films", fetchall=True)
+            return self.execute(f"SELECT * FROM Films", fetchall=True)
         else:
             sql = f"""
-            SELECT {column} FROM Films
+            SELECT {column} FROM Films;
             """
             return self.execute(sql, fetchall=True)
 
-    def select_film(self, table: str, **kwargs):
+    def select_film(self, **kwargs):
         # SQL_EXAMPLE = "SELECT * FROM Users where id=1 AND Name='John'"
-        sql = f"SELECT * FROM Films WHERE "
-        sql, parameters = self.format_args(sql, kwargs)
-
-        return self.execute(sql, parameters=parameters, fetchone=True)
+        if kwargs:
+            sql = f"SELECT * FROM Films WHERE "
+            sql, parameters = self.format_args(sql, kwargs)
+            return self.execute(sql, parameters=parameters, fetchone=True)
+        else:
+            return self.execute("SELECT * FROM Films;", fetchall=True)
 
     def count_films(self):  # вернет какой-то кортеж, надо брать последний элемент
-        return self.execute("SELECT COUNT(*) FROM Films;", fetchone=True)
+        return self.execute("SELECT COUNT (*) FROM Films;", fetchall=True)
 
     def update_recension(self, name, recension, title):  # рецензия на ПРОСМОТРЕННЫЙ фильм
         sql = f"""
@@ -95,17 +99,24 @@ class Database:
         else:
             self.execute("DELETE FROM Users WHERE TRUE", commit=True)
 
-    def change_column(self, name, film, watched_to_watch: bool = False):
-        if watched_to_watch:
+    def change_column(self, name, film):
+        watched_list = self.select_column(column="Watched")
+        to_watch_list = self.select_column(column="ToWatch")
+        if film in [str(number) for film in watched_list for number in film]:
             sql = f"DELETE FROM Films WHERE Name=? AND Watched=?"
             self.execute(sql, parameters=(name, film), commit=True)
-            sql = f"INSERT INTO Films(Name, ToWatch) VALUES (?,?)"
-            self.execute(sql, parameters=(film, name), commit=True)
-            return
-        sql = f"DELETE FROM Films WHERE Name=? AND ToWatch=?"
-        self.execute(sql, parameters=(name, film), commit=True)
-        sql = f"INSERT INTO Films(Name, Watched) VALUES (?,?)"
-        self.execute(sql, parameters=(film, name), commit=True)
+            sql = f"INSERT INTO Films(id, Name, ToWatch) VALUES (?, ?, ?)"
+            self.execute(sql, parameters=(len(self.select_film())+1, name, film), commit=True)
+            return "from_watched"
+        elif film in [str(number) for film in to_watch_list for number in film]:
+            sql = f"DELETE FROM Films WHERE Name=? AND ToWatch=?"
+            self.execute(sql, parameters=(name, film), commit=True)
+            sql = f"INSERT INTO Films(id, Name, Watched) VALUES (?, ?, ?)"
+            self.execute(sql, parameters=(len(self.select_film())+1, name, film), commit=True)
+            return "from_to_watch"
+        else:
+            return False
+
 
 
 
