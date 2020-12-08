@@ -12,15 +12,21 @@ from loader import dp, db
 @dp.message_handler(Command("watch"))
 async def to_watch(message: types.Message, state: FSMContext):
     command = str(message.text)
-    film_template = re.findall(r"[^(/watch )]\s*\w*", command)
+    film_template = re.findall(r"[/watch]\s*\w*", command)
+    print(film_template)
     title = " ".join([word for word in film_template])
     if not title:
         await message.answer("Отправьте фильм, который хотите добавить в список для просмотра.\n"
-                             f"{db.select_film()}")
+                             f"{db.select_all()}")
         await state.set_state("want_to_watch")
         return
-    db.add_film(id=len(db.select_film()) + 1, name=message.from_user.full_name, title=title)
-    await message.answer("Фильм добавлен в библиотеку")
+    """УЧАСТОК НИЖЕ МОЖНО СДЕЛАТЬ ФУНКЦИЕЙ, ЭТО ПРОВЕРКА НА ДОБАВЛЕНИЕ ФИЛЬМА, ЕСЛИ РАНЬШЕ ЕГО НЕ БЫЛО В БИБЛ"""
+    count = len(db.select_all())
+    db.add_film(name=message.from_user.full_name, title=title)
+    if len(db.select_all()) > count:
+        await message.answer("Фильм добавлен в библиотеку")
+    else:
+        await message.answer("Этот фильм уже в вашей библиотеке")
 
 
 @dp.message_handler(state="want_to_watch")
@@ -29,13 +35,17 @@ async def adding(message: types.Message, state: FSMContext):
         title = str(message.text)
         film_template = re.findall(r"\W+", title)
         if film_template and film_template[0] == "/":
-            await message.answer("Введите имя фильма, а не команду")
+            await message.answer("Введите навзание фильма, а не команду")
             return
         else:
-            db.add_film(id=len(db.select_film()) + 1, name=message.from_user.full_name, title=title)
+            count = len(db.select_all())
+            db.add_film(name=message.from_user.full_name, title=title)
+            if len(db.select_all()) > count:
+                await message.answer("Фильм добавлен в библиотеку")
+            else:
+                await message.answer("Этот фильм уже в вашей библиотеке")
     except Exception as err:
         logging.info(str(err) + "\n want_to_watch")
-    await message.answer("Фильм добавлен в библиотеку")
     await state.finish()
 
 
@@ -49,8 +59,12 @@ async def new_film(message: types.Message, state: FSMContext):
                              f"По желанию можете оставить к нему свою заметку. - ПОКА НЕ РАБОТАЕТ")
         await state.set_state("add_title")
         return
-    db.add_film(id=len(db.select_film()) + 1, name=message.from_user.full_name, title=title, watched=True)
-    await message.answer("Фильм добавлен в библиотеку")
+    count = len(db.select_all())
+    db.add_film(name=message.from_user.full_name, title=title)
+    if len(db.select_all()) > count:
+        await message.answer("Фильм добавлен в библиотеку")
+    else:
+        await message.answer("Этот фильм уже в вашей библиотеке")
 
 
 @dp.message_handler(state="add_title")
@@ -59,14 +73,18 @@ async def adding(message: types.Message, state: FSMContext):
         title = str(message.text)
         film_template = re.findall(r"\W+", title)
         if film_template[0] != "/":
-            db.add_film(id=len(db.select_film()) + 1, name=message.from_user.full_name, title=title, watched=True)
-            await message.answer(str(db.select_film()))
+            count = len(db.select_all())
+            db.add_film(name=message.from_user.full_name, title=title)
+            if len(db.select_all()) > count:
+                await message.answer("Фильм добавлен в библиотеку")
+            else:
+                await message.answer("Этот фильм уже в вашей библиотеке")
+            await message.answer(str(db.select_all()))
         else:
             await message.answer("Введите имя фильма, а не команду")
             return
     except Exception as err:
         await message.answer(f"{err}, {db.select_film()}")
-    await message.answer("Фильм добавлен в библиотеку")
     await state.finish()
 
 
