@@ -52,9 +52,11 @@ class Database:
     def add_film(self, name: str, title: str, watched: bool = False):
         watched_list = self.select_column(column="Watched")
         to_watch_list = self.select_column(column="ToWatch")
-        if (title in [str(number) for film in watched_list for number in film]) or \
-                (title in [str(number) for film in to_watch_list for number in film]):
-            return
+        if title in [str(number) for film in watched_list for number in film] or \
+                title in [str(number) for film in to_watch_list for number in film]:
+            print(watched_list)
+            print(to_watch_list)
+            return False
         if watched:
             sql = f"""
             INSERT INTO Films(Name, Watched) VALUES(?, ?);
@@ -63,7 +65,8 @@ class Database:
             sql = f"""
             INSERT INTO Films(Name, ToWatch) VALUES(?, ?);
             """
-        return self.execute(sql, parameters=(name, title), commit=True)
+        self.execute(sql, parameters=(name, title), commit=True)
+        return True
 
     def select_column(self, column: str = None):  # все фильмы из всех таблиц, вернет 2 списка
         sql = f"""
@@ -89,18 +92,21 @@ class Database:
         """
         return self.execute(sql, parameters=(recension, name, title), commit=True)
 
-    def delete_film(self, name: str = None, column: str = None):
-        if name and column:
-            sql = f"DELETE FROM Films WHERE Name=? AND {column}=?"
-            self.execute(sql, parameters=(name, column), commit=True)
-            return
-        elif name:
-            sql = f"DELETE FROM Films WHERE Name=?"
-            self.execute(sql, parameters=(name,), commit=True)
+    def delete_film(self, name: str, title: str):
+        watched_list = self.select_column(column="Watched")
+        to_watch_list = self.select_column(column="ToWatch")
+        if title in [str(number) for film in watched_list for number in film]:
+            sql = f"DELETE FROM Films WHERE Name=? AND Watched=?"
+            self.execute(sql, parameters=(name, title), commit=True)
+            return True
+        elif title in [str(number) for film in to_watch_list for number in film]:
+            sql = f"DELETE FROM Films WHERE Name=? AND ToWatch=?"
+            self.execute(sql, parameters=(name, title), commit=True)
+            return True
         else:
-            self.execute("DELETE FROM Users WHERE TRUE", commit=True)
+            return False
 
-    def change_column(self, name, film):
+    def change_column(self, name: str, film: str):
         watched_list = self.select_column(column="Watched")
         to_watch_list = self.select_column(column="ToWatch")
         if film in [str(number) for film in watched_list for number in film]:
