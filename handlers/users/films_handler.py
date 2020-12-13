@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from aiogram import types
@@ -7,12 +8,23 @@ from aiogram.dispatcher.filters import Command
 import re
 
 from loader import dp, db
+from utils.misc import rate_limit
 
+
+async def send_and_delete(message: types.Message, phrase):
+    service_message = await message.answer(phrase)
+    await asyncio.sleep(4)
+    await service_message.delete()
+
+
+@dp.message_handler(Command("exit"))
+async def mistake(message: types.Message):
+    await message.answer("Просто так эта команда не работает")
 
 @dp.message_handler(Command("watch"))
 async def to_watch(message: types.Message, state: FSMContext):
     command = str(message.text)
-    film_template = re.findall(r"[^/watch ]\w+", command)
+    film_template = re.findall(r"[^/watch][\w+\d+]", command)
     print(film_template)
     title = " ".join([word for word in film_template])
     if not title:
@@ -22,9 +34,9 @@ async def to_watch(message: types.Message, state: FSMContext):
         return
     add_film = db.add_film(name=message.from_user.full_name, title=title)
     if not add_film:
-        await message.answer("Этот фильм уже в вашей библиотеке")
+        await send_and_delete("Этот фильм уже в вашей библиотеке")
     else:
-        await message.answer("Фильм добавлен в библиотеку")
+        await send_and_delete("Фильм добавлен в библиотеку")
 
 
 @dp.message_handler(state="want_to_watch")
@@ -32,7 +44,7 @@ async def adding(message: types.Message, state: FSMContext):
     try:
         title = str(message.text)
         if title == "/exit":
-            await message.answer("Вы отменили запрос")
+            await send_and_delete("Вы отменили запрос")
             await state.finish()
             return
         film_template = re.findall(r"\W+", title)
@@ -42,13 +54,14 @@ async def adding(message: types.Message, state: FSMContext):
         else:
             add_film = db.add_film(name=message.from_user.full_name, title=title)
             if not add_film:
-                await message.answer("Этот фильм уже в вашей библиотеке")
+                service_message = await message.answer("Этот фильм уже в вашей библиотеке")
+                await asyncio.sleep(4)
+                await service_message.delete()
             else:
                 await message.answer("Фильм добавлен в библиотеку")
     except Exception as err:
         logging.info(str(err) + "\n want_to_watch")
     await state.finish()
-
 
 @dp.message_handler(Command("watched"))
 async def new_film(message: types.Message, state: FSMContext):
@@ -62,7 +75,10 @@ async def new_film(message: types.Message, state: FSMContext):
         return
     add_film = db.add_film(name=message.from_user.full_name, title=title, watched=True)
     if not add_film:
-        await message.answer("Этот фильм уже в вашей библиотеке")
+        service_message = await message.answer("Этот фильм уже в вашей библиотеке")
+        await asyncio.sleep(4)
+        await service_message.delete()
+
     else:
         await message.answer("Фильм добавлен в библиотеку")
 
@@ -89,7 +105,6 @@ async def adding(message: types.Message, state: FSMContext):
     except Exception as err:
         await message.answer(f"{err}, {db.select_all()}")
     await state.finish()
-
 
 @dp.message_handler(Command("done"))
 async def replace(message: types.Message, state: FSMContext):
@@ -132,12 +147,13 @@ async def getting_done(message: types.Message, state: FSMContext):
             elif changed == "from_watched":
                 await message.answer("Фильм добавлен в \"Посмотреть позже\"")
             else:
-                await message.answer("Такого фильма нет в вашей библиотеке, введите название снова")
+                service_message = await message.answer("Такого фильма нет в библиотеке, повторите попытку")
+                await asyncio.sleep(4)
+                await service_message.delete()
                 return
     except Exception as err:
         logging.exception(err)
     await state.finish()
-
 
 @dp.message_handler(Command("delete"))
 async def delete_film(message: types.Message, state: FSMContext):
@@ -152,7 +168,9 @@ async def delete_film(message: types.Message, state: FSMContext):
     try:
         delete_film = db.delete_film(name=message.from_user.full_name, title=title)
         if not delete_film:
-            await message.answer("Такого фильма нет в библиотеке, повторите попытку")
+            service_message = await message.answer("Такого фильма нет в библиотеке, повторите попытку")
+            await asyncio.sleep(4)
+            await service_message.delete()
             return
         else:
             await message.answer(f"Вы удалили фильм {title}")
@@ -175,12 +193,13 @@ async def deleting(message: types.Message, state: FSMContext):
         else:
             delete_film = db.delete_film(name=message.from_user.full_name, title=title)
             if not delete_film:
-                await message.answer("Такого фильма нет в библиотеке, повторите попытку")
+                service_message = await message.answer("Такого фильма нет в библиотеке, повторите попытку")
+                await asyncio.sleep(4)
+                await service_message.delete()
                 return
             else:
                 await message.answer(f"Вы удалили фильм {title}")
     except Exception as err:
         await message.answer(str(err))
     await state.finish()
-
 
